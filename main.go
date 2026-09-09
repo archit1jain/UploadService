@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,6 +34,28 @@ func main() {
 			return
 		}
 		http.ServeFile(w, r, "index.html")
+	})
+
+	http.HandleFunc("/lan", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lan" {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, "lan.html")
+	})
+
+	http.HandleFunc("/api/lan-url", func(w http.ResponseWriter, r *http.Request) {
+		ip := getLANIP()
+		if ip == "" {
+			http.Error(w, "Could not determine LAN IP", http.StatusInternalServerError)
+			return
+		}
+		url := fmt.Sprintf("http://%s:%s/lan", ip, port)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"url": url,
+		})
 	})
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -142,4 +166,39 @@ func getUniqueFilepath(dir, filename string) (string, error) {
 		// File exists, try next iteration
 	}
 	return "", fmt.Errorf("could not find a unique filename for %s", filename)
+}
+
+func getLANIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				// Check if it's a private IP
+				ip := ipnet.IP.String()
+				if strings.HasPrefix(ip, "192.168.") ||
+				   strings.HasPrefix(ip, "10.") ||
+				   is172Private(ip) {
+					return ip
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func is172Private(ip string) bool {
+	if !strings.HasPrefix(ip, "172.") {
+		return false
+	}
+	parts := strings.Split(ip, ".")
+	if len(parts) >= 2 {
+		var secondOctet int
+		fmt.Sscanf(parts[1], "%d", &secondOctet)
+		return secondOctet >= 16 && secondOctet <= 31
+	}
+	return false
 }

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>File Drop</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+            text-align: center;
+        }
+        h1 {
+            margin-top: 20px;
+            margin-bottom: 40px;
+            font-size: 2em;
+        }
+        .file-input-wrapper {
+            margin-bottom: 20px;
+        }
+        /* Hide actual input and style label as big button */
+        input[type="file"] {
+            display: none;
+        }
+        .select-btn {
+            display: inline-block;
+            width: 80%;
+            max-width: 300px;
+            padding: 20px;
+            background-color: #6c757d;
+            color: white;
+            border-radius: 8px;
+            font-size: 1.2em;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .file-list {
+            margin: 30px auto;
+            text-align: left;
+            width: 80%;
+            max-width: 300px;
+            font-size: 1em;
+            color: #555;
+            display: none;
+        }
+        .file-list ul {
+            list-style-type: none;
+            padding-left: 0;
+            margin: 10px 0 0 0;
+        }
+        .file-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #ddd;
+            word-wrap: break-word;
+        }
+        .file-list li:last-child {
+            border-bottom: none;
+        }
+        button {
+            display: inline-block;
+            width: 80%;
+            max-width: 300px;
+            padding: 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2em;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        .status {
+            margin-top: 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .progress-bar {
+            width: 80%;
+            max-width: 300px;
+            margin: 20px auto 0 auto;
+            background-color: #e9ecef;
+            border-radius: 8px;
+            height: 30px;
+            display: none;
+            overflow: hidden;
+        }
+        .progress {
+            height: 100%;
+            background-color: #28a745;
+            width: 0%;
+            transition: width 0.2s;
+        }
+    </style>
+</head>
+<body>
+    <h1>File Drop</h1>
+
+    <div class="file-input-wrapper">
+        <label for="fileInput" class="select-btn">Select Files</label>
+        <input type="file" id="fileInput" multiple>
+    </div>
+
+    <div class="file-list" id="fileListContainer">
+        <strong>Selected:</strong>
+        <ul id="fileList"></ul>
+    </div>
+
+    <button id="uploadBtn" disabled>Send Files</button>
+
+    <div class="progress-bar" id="progressBarContainer">
+        <div class="progress" id="progressBar"></div>
+    </div>
+
+    <div class="status" id="statusMessage"></div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const fileListContainer = document.getElementById('fileListContainer');
+        const fileList = document.getElementById('fileList');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const progressBarContainer = document.getElementById('progressBarContainer');
+        const progressBar = document.getElementById('progressBar');
+        const statusMessage = document.getElementById('statusMessage');
+
+        fileInput.addEventListener('change', () => {
+            fileList.innerHTML = '';
+            statusMessage.textContent = '';
+            progressBarContainer.style.display = 'none';
+            progressBar.style.width = '0%';
+
+            if (fileInput.files.length > 0) {
+                fileListContainer.style.display = 'block';
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    const li = document.createElement('li');
+                    li.textContent = fileInput.files[i].name;
+                    fileList.appendChild(li);
+                }
+                uploadBtn.disabled = false;
+            } else {
+                fileListContainer.style.display = 'none';
+                uploadBtn.disabled = true;
+            }
+        });
+
+        uploadBtn.addEventListener('click', () => {
+            if (fileInput.files.length === 0) return;
+
+            const formData = new FormData();
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('files', fileInput.files[i]);
+            }
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/upload', true);
+
+            uploadBtn.disabled = true;
+            fileInput.disabled = true;
+            progressBarContainer.style.display = 'block';
+            statusMessage.textContent = 'Uploading... 0%';
+            statusMessage.style.color = '#333';
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percentComplete + '%';
+                    statusMessage.textContent = 'Uploading... ' + percentComplete + '%';
+                }
+            };
+
+            xhr.onload = () => {
+                uploadBtn.disabled = false;
+                fileInput.disabled = false;
+
+                if (xhr.status === 200) {
+                    statusMessage.textContent = '✓ Transfer complete';
+                    statusMessage.style.color = '#28a745';
+                    fileInput.value = ''; // Clear input
+                    fileListContainer.style.display = 'none';
+                } else {
+                    statusMessage.textContent = 'Upload failed';
+                    statusMessage.style.color = '#dc3545';
+                }
+            };
+
+            xhr.onerror = () => {
+                uploadBtn.disabled = false;
+                fileInput.disabled = false;
+                statusMessage.textContent = 'Upload failed: network error';
+                statusMessage.style.color = '#dc3545';
+            };
+
+            xhr.send(formData);
+        });
+    </script>
+</body>
+</html>
